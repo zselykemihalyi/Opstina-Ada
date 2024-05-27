@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.5.1/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js"></script>
+  <script src="C:/8_semestar/KIS/seminarski/leaflet-measure-master/leaflet-measure/src/leaflet-measure.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+  <title>Opstina Ada</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+
+    .coordinate {
+      position: absolute;
+      bottom: 10px;
+      right: 50%;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background-color: #000000;
+      color: #fff;
+      border: 1px solid red;
+      border-radius: 0px;
+    }
+
+    #routingButton {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<button id="routingButton" onclick="toggleRouting()">Enable Routing</button>
+<button onclick="fullScreenview()">View in full screen</button>
+<script>
+  var map = L.map("map").setView([45.7, 20.1], 10);
+
+  var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  //marker
+  var marker = L.marker([45.80506, 20.1198]).addTo(map);
+
+  // Variable to track the state of routing
+  var routingEnabled = false;
+  var routingControl;
+
+  // Function to toggle routing state
+  function toggleRouting() {
+    routingEnabled = !routingEnabled;
+    document.getElementById('routingButton').innerText = routingEnabled ? 'Disable Routing' : 'Enable Routing';
+
+    if (!routingEnabled && routingControl) {
+      map.removeControl(routingControl);
+      routingControl = null;
+    }
+  }
+
+  //map click event
+  map.on('click', function(e){
+    if (routingEnabled) {
+      if (!routingControl) {
+        routingControl = L.Routing.control({
+          waypoints: [
+            L.latLng(45.80506, 20.1198),
+            L.latLng(e.latlng.lat, e.latlng.lng)
+          ]
+        }).on('routesfound', function(e){
+          e.routes[0].coordinates.forEach(function(coord, index){
+            setTimeout(()=>{
+              marker.setLatLng([coord.lat, coord.lng]);
+            }, 100 * index);
+          });
+        }).addTo(map);
+      } else {
+        routingControl.spliceWaypoints(routingControl.getWaypoints().length - 1, 1, L.latLng(e.latlng.lat, e.latlng.lng));
+      }
+    }
+  });
+
+  //load wms form geoserver
+  const mywms1 = L.tileLayer.wms("http://localhost:8080/geoserver/kis/wms", {
+    layers: 'kis:KOOOADA',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.0',
+    attribution: "country layer"
+  });
+  mywms1.addTo(map);
+
+  const mywms2 = L.tileLayer.wms("http://localhost:8080/geoserver/kis/wms", {
+    layers: 'kis:Putevi',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.0',
+    attribution: "country layer"
+  });
+  mywms2.addTo(map);
+
+  const mywms3 = L.tileLayer.wms("http://localhost:8080/geoserver/kis/wms", {
+    layers: 'kis:kucnibroj_utrine',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.0',
+    attribution: "country layer"
+  });
+  mywms3.addTo(map);
+
+  const mywms4 = L.tileLayer.wms("http://localhost:8080/geoserver/kis/wms", {
+    layers: 'kis:objekti_ada',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.0',
+    attribution: ""
+  });
+  mywms4.addTo(map);
+
+  const mywms5 = L.tileLayer.wms("http://localhost:8080/geoserver/kis/wms", {
+    layers: 'kis:ulice_utrine',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.0',
+    attribution: "country layer"
+  });
+  mywms5.addTo(map);
+
+  //Layer control
+  var baseMaps = {
+    "OSM": osm
+  };
+
+  var overlayMaps = {
+    "Katastarske opstine": mywms1,
+    'Ulice Ada': mywms2,
+    'Ulice Utrine': mywms5,
+    'Kucni brojevi utrine': mywms3,
+    'Objekti Ada': mywms4
+  };
+
+  L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+
+  // Map click event
+  map.on('click', function(e) {
+    var latlng = e.latlng;
+    var url = "http://localhost:8080/geoserver/kis/wms" +
+      "?request=GetFeatureInfo" +
+      "&service=WMS" +
+      "&version=1.1.0" +
+      "&layers=kis:KOOOADA,kis:Putevi,kis:kucnibroj_utrine,kis:objekti_ada,kis:ulice_utrine" + // Minden réteg neve
+      "&styles=" +
+      "&bbox=" + map.getBounds().toBBoxString() +
+      "&width=" + map.getSize().x +
+      "&height=" + map.getSize().y +
+      "&srs=" + map.options.crs.code +
+      "&format=image/png" +
+      "&transparent=true" +
+      "&info_format=application/json" +
+      "&query_layers=kis:KOOOADA,kis:Putevi,kis:kucnibroj_utrine,kis:objekti_ada,kis:ulice_utrine" + // Minden réteg neve
+      "&x=" + latlng.lng +
+      "&y=" + latlng.lat;
+
+    fetch(url)
+      .then(function(response) {
+        return response.json();
+      })
+      .then(function(data) {
+        var features = data.features;
+        if (features && features.length > 0) {
+          var attributes = features[0].properties;
+          var attributeString = "";
+          for (var key in attributes) {
+            attributeString += key + ": " + attributes[key] + "\n";
+          }
+          alert(attributeString);
+        }
+      })
+      .catch(function(error) {
+        console.log("Error:", error);
+      });
+  });
+
+  //Leaflet events
+  map.zoomControl.setPosition('topright')
+  map.on('mouseover', function () {
+    console.log('your mouse is over the map')
+  });
+
+  map.on('mousemove', function (e) {
+    document.getElementsByClassName('coordinate')[0].innerHTML = 'lat: ' + e.latlng.lat + ' lng: ' + e.latlng.lng;
+  });
+
+  //add map scale
+  L.control.scale({ position: 'bottomright' }).addTo(map);
+
+  //fullscreen map
+  var mapID = document.getElementById('map');
+  function fullScreenview() {
+    mapID.requestFullscreen();
+  }
+
+  //leaflet measure
+  L.control.measure().addTo(map);
+</script>
+</body>
+</html>
